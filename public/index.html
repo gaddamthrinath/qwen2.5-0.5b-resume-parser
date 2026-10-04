@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resume Parser AI - Llama LiteParse OCR & Ollama (Q8 & Q4)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Global Header (Fixed & never cut off by slider) -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="brand-title">
+          <div class="logo-icon-wrap">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+          </div>
+          <h1>Resume<span>Parser</span></h1>
+        </div>
+
+        <div class="header-tags">
+          <span class="badge-tag green">
+            <span class="dot-green"></span> Llama LiteParse OCR
+          </span>
+
+          <!-- Model Selector Dropdown -->
+          <div class="model-select-wrapper">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" class="model-select-icon">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+            <select id="model-selector" class="model-select" title="Choose Quantization Model">
+              <option value="qwenResumeParserQ8" selected>Qwen 0.5B (Q8_0 • High Precision)</option>
+              <option value="qewnResumePraser">Qwen 0.5B (Q4_K_M • Fast)</option>
+            </select>
+          </div>
+
+          <!-- Model Setup & Verification Guide Trigger -->
+          <button class="btn-model-guide" id="btn-model-guide" title="Check Qwen Resume Models & Registration Commands">
+            <span class="model-guide-dot checking" id="model-guide-dot"></span>
+            <span id="model-guide-text">Checking Models...</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <!-- Warm Memory Widget with Button + Subnote -->
+        <div class="warm-memory-widget">
+          <button class="btn btn-secondary btn-sm btn-preload" id="btn-preload" title="Pre-warm selected model resident in RAM with keep_alive: -1">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" class="warm-icon">
+              <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+              <rect x="9" y="9" width="6" height="6"></rect>
+              <line x1="9" y1="1" x2="9" y2="4"></line>
+              <line x1="15" y1="1" x2="15" y2="4"></line>
+              <line x1="9" y1="20" x2="9" y2="23"></line>
+              <line x1="15" y1="20" x2="15" y2="23"></line>
+              <line x1="20" y1="9" x2="23" y2="9"></line>
+              <line x1="20" y1="14" x2="23" y2="14"></line>
+              <line x1="1" y1="9" x2="4" y2="9"></line>
+              <line x1="1" y1="14" x2="4" y2="14"></line>
+            </svg>
+            <span id="preload-btn-text">Warm Memory</span>
+          </button>
+          <div class="memory-subnote" id="memory-subnote" title="Status of in-memory LLM residency">
+            <span class="subnote-dot checking" id="subnote-dot"></span>
+            <span id="memory-subnote-text">Checking RAM state...</span>
+          </div>
+        </div>
+
+        <div class="server-status" id="server-status" title="Backend Server & OCR status">
+          <span class="status-dot checking" id="status-dot"></span>
+          <span class="status-text" id="status-text">Checking server...</span>
+        </div>
+
+        <!-- Global Parse Button in Header -->
+        <button class="btn btn-primary btn-parse-main" id="btn-parse">
+          <span class="btn-spinner" id="parse-spinner" style="display:none;"></span>
+          <svg id="parse-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+          </svg>
+          <span id="parse-btn-text">Parse Resume</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Full-Screen Edge-to-Edge Workspace -->
+    <main class="workspace" id="workspace">
+      <!-- Left Pane: Full-Height PDF & Document Source -->
+      <section class="pane pane-left" id="pane-left">
+        <!-- Left Toolbar -->
+        <div class="pane-toolbar">
+          <div class="toolbar-left">
+            <div class="tab-pill-group">
+              <button class="tab-pill active" id="tab-pdf-view" data-tab="pdf">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                PDF View
+              </button>
+              <button class="tab-pill" id="tab-text-view" data-tab="text">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="21" y1="10" x2="3" y2="10"></line>
+                  <line x1="21" y1="6" x2="3" y2="6"></line>
+                  <line x1="21" y1="14" x2="3" y2="14"></line>
+                  <line x1="21" y1="18" x2="3" y2="18"></line>
+                </svg>
+                LiteParse OCR Text
+              </button>
+            </div>
+
+            <!-- Upload PDF Action in Toolbar -->
+            <input type="file" id="file-input" accept=".pdf,.docx,.txt,.md" style="display:none;">
+            <button class="btn btn-secondary btn-sm btn-upload-tool" id="btn-upload-file">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              Upload PDF
+            </button>
+          </div>
+
+          <div class="toolbar-right">
+            <span class="file-loaded-pill" id="file-loaded-pill" style="display:none;">
+              <span class="file-icon-badge">PDF</span>
+              <span id="loaded-file-name">resume.pdf</span>
+              <span class="remove-file-btn" id="remove-file-btn" title="Remove">&times;</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Left Content Area (Full Height PDF / OCR View) -->
+        <div class="pane-content left-content" id="left-content-area">
+          <!-- Full PDF Viewer & Upload Zone -->
+          <div class="pdf-full-wrapper" id="pdf-full-wrapper">
+            <!-- Empty Drop State -->
+            <div class="pdf-upload-empty" id="pdf-upload-empty">
+              <div class="empty-drop-box" id="drop-target-area">
+                <div class="empty-drop-icon">
+                  <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.4">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="12" y1="18" x2="12" y2="12"></line>
+                    <polyline points="9 15 12 12 15 15"></polyline>
+                  </svg>
+                </div>
+                <h3>Drag & Drop Resume PDF here</h3>
+                <p>Preserves spatial OCR layout with Llama LiteParse</p>
+                <button class="btn btn-primary" id="btn-select-pdf">Select PDF File</button>
+              </div>
+            </div>
+
+            <!-- Full Screen PDF Frame with 90% Zoom -->
+            <iframe id="pdf-frame" class="pdf-full-frame" style="display:none;" title="Resume PDF"></iframe>
+          </div>
+
+          <!-- Full Screen Text / OCR Editor -->
+          <div class="ocr-text-wrapper" id="ocr-text-wrapper" style="display:none;">
+            <div class="ocr-text-header">
+              <span id="ocr-status-label">Llama LiteParse Extracted Layout Text</span>
+              <span class="ocr-stats" id="ocr-stats">0 words • 0 chars</span>
+            </div>
+            <textarea 
+              id="resume-text-input" 
+              class="ocr-textarea" 
+              placeholder="Extracted layout text from Llama LiteParse will appear here, or you can paste raw resume text..."
+              spellcheck="false"
+            ></textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- Center Draggable Divider -->
+      <div class="resizer" id="resizer" title="Drag to resize (Double-click for 50/50)">
+        <div class="resizer-handle">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </div>
+
+      <!-- Right Pane: Full-Height Results (Visual Profile / JSON) -->
+      <section class="pane pane-right" id="pane-right">
+        <!-- Right Toolbar -->
+        <div class="pane-toolbar">
+          <div class="toolbar-left">
+            <div class="tab-pill-group">
+              <button class="tab-pill active" id="tab-visual" data-view="visual">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="3" y1="9" x2="21" y2="9"></line>
+                  <line x1="9" y1="21" x2="9" y2="9"></line>
+                </svg>
+                Visual Profile
+              </button>
+              <button class="tab-pill" id="tab-json" data-view="json">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="16 18 22 12 16 6"></polyline>
+                  <polyline points="8 6 2 12 8 18"></polyline>
+                </svg>
+                JSON Output
+              </button>
+            </div>
+
+            <!-- Post-Processing Indicator Badge (Orange or Green) -->
+            <div class="postprocess-badge-wrap" id="postprocess-badge-wrap" style="display:none;">
+              <span class="postprocess-pill" id="postprocess-badge" title="Cleaned JSON">
+                <span class="badge-dot" id="postprocess-dot"></span>
+                <span id="postprocess-label">Processed</span>
+              </span>
+            </div>
+          </div>
+
+          <div class="toolbar-right">
+            <span class="benchmark-pill" id="benchmark-pill" style="display:none;">
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              <span id="parse-time">0.0s</span>
+            </span>
+            <button class="btn btn-secondary btn-xs btn-tool-action" id="btn-copy-json" title="Copy JSON">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span id="copy-btn-text">Copy JSON</span>
+            </button>
+            <button class="btn btn-secondary btn-xs btn-tool-action" id="btn-download-json" title="Export JSON">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Export
+            </button>
+          </div>
+        </div>
+
+        <!-- Right Content Area -->
+        <div class="pane-content right-content" id="right-content-area">
+          <!-- Initial Empty State -->
+          <div class="empty-state" id="empty-state">
+            <div class="empty-icon">
+              <svg viewBox="0 0 24 24" width="52" height="52" fill="none" stroke="currentColor" stroke-width="1.2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <circle cx="12" cy="14" r="3"></circle>
+                <line x1="12" y1="17" x2="12" y2="19"></line>
+              </svg>
+            </div>
+            <h3>Candidate Intelligence</h3>
+            <p>Upload a resume PDF on the left and click <strong>Parse Resume</strong> in the header to view extracted candidate information.</p>
+          </div>
+
+          <!-- Loading State -->
+          <div class="loading-state" id="loading-state" style="display:none;">
+            <div class="loader-circle"></div>
+            <h3 id="loading-title">Parsing Resume...</h3>
+            <p id="loading-subtext">Llama LiteParse OCR is reading spatial layout and passing directly to the selected model.</p>
+            <div class="timer-badge">Elapsed: <span id="live-timer">0.0</span>s</div>
+          </div>
+
+          <!-- Visual Profile Container -->
+          <div class="visual-profile-view" id="visual-profile-view" style="display:none;">
+            <!-- Header Hero -->
+            <div class="profile-hero">
+              <div class="avatar" id="avatar-initials">CD</div>
+              <div class="hero-details">
+                <h2 class="name" id="v-name">Candidate Name</h2>
+                <p class="title" id="v-title">Professional Title</p>
+                <div class="contact-row">
+                  <span class="contact-pill" id="v-email-chip" style="display:none;">
+                    <a id="v-email-link" href="#">email@example.com</a>
+                  </span>
+                  <span class="contact-pill" id="v-phone-chip" style="display:none;">
+                    <span id="v-phone-text">+1 234 567 890</span>
+                  </span>
+                  <span class="contact-pill" id="v-location-chip" style="display:none;">
+                    <span id="v-location-text">City, Country</span>
+                  </span>
+                </div>
+                <div class="links-row" id="v-links-row"></div>
+              </div>
+            </div>
+
+            <!-- Summary -->
+            <div class="section-block" id="sec-summary">
+              <div class="section-heading">
+                <span class="heading-title-wrap">
+                  <svg class="heading-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                  </svg>
+                  Professional Summary
+                </span>
+              </div>
+              <p class="summary-text" id="v-summary-text"></p>
+            </div>
+
+            <!-- Skills -->
+            <div class="section-block" id="sec-skills">
+              <div class="section-heading">
+                <span class="heading-title-wrap">
+                  <svg class="heading-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                  </svg>
+                  Skills & Technologies
+                </span>
+                <span class="count-badge" id="v-skills-count">0</span>
+              </div>
+              <div class="skills-grid" id="v-skills-cloud"></div>
+            </div>
+
+            <!-- Experience -->
+            <div class="section-block" id="sec-experience">
+              <div class="section-heading">
+                <span class="heading-title-wrap">
+                  <svg class="heading-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                  </svg>
+                  Work Experience
+                </span>
+                <span class="count-badge" id="v-exp-count">0</span>
+              </div>
+              <div class="timeline-list" id="v-experience-timeline"></div>
+            </div>
+
+            <!-- Education (Prominent Timeline UI Matching Work Experience) -->
+            <div class="section-block" id="sec-education">
+              <div class="section-heading">
+                <span class="heading-title-wrap">
+                  <svg class="heading-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 10v6M2 10l10-5 10 5-10 5z"></path>
+                    <path d="M6 12v5c3 3 9 3 12 0v-5"></path>
+                  </svg>
+                  Education & Academic Background
+                </span>
+                <span class="count-badge" id="v-edu-count">0</span>
+              </div>
+              <div class="timeline-list education-timeline" id="v-education-timeline"></div>
+            </div>
+
+            <!-- Notable Projects (Virtual Cards) -->
+            <div class="section-block" id="sec-projects">
+              <div class="section-heading">
+                <span class="heading-title-wrap">
+                  <svg class="heading-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                    <polyline points="2 17 12 22 22 17"></polyline>
+                    <polyline points="2 12 12 17 22 12"></polyline>
+                  </svg>
+                  Notable Projects
+                </span>
+                <span class="count-badge" id="v-proj-count">0</span>
+              </div>
+              <div class="virtual-cards-grid projects-grid" id="v-projects-grid"></div>
+            </div>
+
+            <!-- Certifications (Virtual Cards) -->
+            <div class="section-block" id="sec-certifications">
+              <div class="section-heading">
+                <span class="heading-title-wrap">
+                  <svg class="heading-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    <polyline points="9 12 11 14 15 10"></polyline>
+                  </svg>
+                  Certifications & Licenses
+                </span>
+                <span class="count-badge" id="v-cert-count">0</span>
+              </div>
+              <div class="virtual-cards-grid certs-grid" id="v-certifications-list"></div>
+            </div>
+
+            <!-- Awards & Achievements (Virtual Cards) -->
+            <div class="section-block" id="sec-awards">
+              <div class="section-heading">
+                <span class="heading-title-wrap">
+                  <svg class="heading-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="8" r="7"></circle>
+                    <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                  </svg>
+                  Awards & Achievements
+                </span>
+                <span class="count-badge" id="v-awards-count">0</span>
+              </div>
+              <div class="virtual-cards-grid awards-grid" id="v-awards-list"></div>
+            </div>
+
+            <!-- Spoken Languages (Virtual Cards) -->
+            <div class="section-block" id="sec-languages">
+              <div class="section-heading">
+                <span class="heading-title-wrap">
+                  <svg class="heading-icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                  </svg>
+                  Spoken Languages
+                </span>
+                <span class="count-badge" id="v-lang-count">0</span>
+              </div>
+              <div class="virtual-cards-grid languages-grid" id="v-languages-cloud"></div>
+            </div>
+          </div>
+
+          <!-- Raw / Processed JSON View with Sub-tabs -->
+          <div class="json-code-view-container" id="json-code-view" style="display:none;">
+            <div class="json-sub-toolbar">
+              <div class="sub-tab-group">
+                <button class="sub-tab-btn active" id="subtab-processed" data-subjson="processed">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                  </svg>
+                  <span>Cleaned JSON</span>
+                </button>
+                <button class="sub-tab-btn" id="subtab-raw" data-subjson="raw">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                  </svg>
+                  <span>Raw LLM JSON</span>
+                </button>
+              </div>
+              <span class="json-notice" id="json-notice-text">Cleaned & validated schema</span>
+            </div>
+            <div class="json-code-view">
+              <pre><code id="json-code-block"></code></pre>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="app-toast"></div>
+
+    <!-- Model Setup & Verification Instructions Modal -->
+    <div class="modal-backdrop" id="model-setup-modal" style="display:none;">
+      <div class="modal-card">
+        <!-- Modal Header -->
+        <div class="modal-header">
+          <div class="modal-header-left">
+            <div class="modal-icon-badge">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                <line x1="8" y1="21" x2="16" y2="21"></line>
+                <line x1="12" y1="17" x2="12" y2="21"></line>
+              </svg>
+            </div>
+            <div>
+              <h3 class="modal-title">Ollama Resume Models Verification</h3>
+              <p class="modal-subtitle">Dedicated Qwen 0.5B Quantized Parser Models (Q8_0 & Q4_K_M)</p>
+            </div>
+          </div>
+          <button class="modal-close-btn" id="btn-close-modal" title="Close modal">&times;</button>
+        </div>
+
+        <!-- Modal Body -->
+        <div class="modal-body">
+          <!-- Live Status Alert Card -->
+          <div class="setup-alert" id="setup-alert-box">
+            <div class="setup-alert-icon" id="setup-alert-icon">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </div>
+            <div class="setup-alert-text">
+              <h4 id="setup-alert-title">Verifying Ollama Models...</h4>
+              <p id="setup-alert-desc">Checking local Ollama connection at http://localhost:11434</p>
+            </div>
+          </div>
+
+          <!-- Section 1: Required Models Status -->
+          <div class="modal-section-title">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            <span>Model Registration Status</span>
+          </div>
+          <div class="models-status-grid" id="modal-models-grid">
+            <!-- Dynamic model cards will be rendered here -->
+          </div>
+
+          <!-- Section 2: Instructions & Commands -->
+          <div class="modal-section-title">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="4 17 10 11 4 5"></polyline>
+              <line x1="12" y1="19" x2="20" y2="19"></line>
+            </svg>
+            <span>Registration Steps & Commands</span>
+          </div>
+
+          <div class="zip-info-box">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+              <line x1="12" y1="22.08" x2="12" y2="12"></line>
+            </svg>
+            <div class="zip-info-text">
+              <strong>Hugging Face Models:</strong> Download the weights and Modelfiles directly from <a href="https://huggingface.co/thrinath25/qwen2.5-0.5b-resume-parser" target="_blank" style="color:var(--primary);text-decoration:underline;">thrinath25/qwen2.5-0.5b-resume-parser</a>
+            </div>
+          </div>
+
+          <div class="setup-steps-list" id="modal-steps-list">
+            <!-- Dynamic step command cards will be rendered here -->
+          </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="btn-refresh-models">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" id="refresh-icon">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            <span id="refresh-btn-text">Re-check Models</span>
+          </button>
+          <button class="btn btn-primary" id="btn-modal-done">Continue to App</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
