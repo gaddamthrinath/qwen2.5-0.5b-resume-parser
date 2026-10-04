@@ -8,6 +8,8 @@ import sys
 import re
 import json
 import time
+import asyncio
+import threading
 import tempfile
 from typing import Optional, List, Dict, Any
 from pathlib import Path
@@ -21,6 +23,43 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+# ==============================================================================
+# DEPENDENCY VALIDATION & ENVIRONMENT CHECK
+# ==============================================================================
+REQUIRED_DEPENDENCIES = [
+    ("fastapi", "fastapi>=0.115.0"),
+    ("uvicorn", "uvicorn[standard]>=0.30.0"),
+    ("httpx", "httpx>=0.27.0"),
+    ("multipart", "python-multipart>=0.0.9"),
+    ("pydantic", "pydantic>=2.8.0"),
+    ("liteparse", "liteparse>=2.15.0"),
+]
+
+def validate_dependencies():
+    missing = []
+    for mod, pkg in REQUIRED_DEPENDENCIES:
+        try:
+            __import__(mod)
+        except ImportError:
+            missing.append(pkg)
+    
+    if missing:
+        error_box = "=" * 65
+        print(f"\n{error_box}", file=sys.stderr)
+        print(" [FATAL ERROR] MISSING REQUIRED PYTHON PACKAGES", file=sys.stderr)
+        print(f"{error_box}", file=sys.stderr)
+        print(f" Python Executable: {sys.executable}", file=sys.stderr)
+        print(f" Python Version:    {sys.version.split()[0]}", file=sys.stderr)
+        print("\n The following required packages are NOT installed in this environment:", file=sys.stderr)
+        for p in missing:
+            print(f"   ❌ {p}", file=sys.stderr)
+        print("\n To install all required packages, run:", file=sys.stderr)
+        print(f'   "{sys.executable}" -m pip install -r requirements.txt', file=sys.stderr)
+        print(f"{error_box}\n", file=sys.stderr)
+        raise SystemExit(1)
+
+validate_dependencies()
+
 import httpx
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,14 +67,31 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel, Field
 
-# Initialize LiteParse from LlamaIndex
+# Strict LiteParse Engine Initializer
 try:
     from liteparse import LiteParse
-    lite_parser = LiteParse()
+    _lite_parser = LiteParse()
     print("[INIT] Llama LiteParse OCR Engine initialized successfully")
-except Exception as e:
-    lite_parser = None
-    print(f"[WARN] Could not initialize Llama LiteParse: {e}")
+except Exception as init_err:
+    error_box = "=" * 65
+    print(f"\n{error_box}", file=sys.stderr)
+    print(" [FATAL ERROR] FAILED TO INITIALIZE LLAMA LITEPARSE OCR ENGINE", file=sys.stderr)
+    print(f"{error_box}", file=sys.stderr)
+    print(f" Error:             {init_err}", file=sys.stderr)
+    print(f" Python Executable: {sys.executable}", file=sys.stderr)
+    print("\n Please ensure 'liteparse' is properly installed and native binaries are accessible:", file=sys.stderr)
+    print(f'   "{sys.executable}" -m pip install --upgrade --force-reinstall liteparse', file=sys.stderr)
+    print(f"{error_box}\n", file=sys.stderr)
+    raise SystemExit(1)
+
+def get_lite_parser():
+    """
+    Return initialized LiteParse instance or raise error if unavailable.
+    """
+    global _lite_parser
+    if _lite_parser is None:
+        raise RuntimeError("LiteParse OCR Engine is not initialized. Please restart the server.")
+    return _lite_parser
 
 # Configuration
 BASE_DIR = Path(__file__).resolve().parent
@@ -321,7 +377,8 @@ async def lifespan(app: FastAPI):
     # Startup
     print("\n" + "=" * 54)
     print("Resume Parser Server (FastAPI) running on http://localhost:3000")
-    print("Llama LiteParse OCR Engine: Ready" if lite_parser else "[WARN] Llama LiteParse OCR Engine: Not Available")
+    parser_active = get_lite_parser() is not None
+    print("Llama LiteParse OCR Engine: Ready" if parser_active else "[WARN] Llama LiteParse OCR Engine: Not Available")
     print("Ollama Multi-Model: qwenResumeParserQ8 & qewnResumePraser")
     print("=" * 54 + "\n")
 
@@ -364,9 +421,10 @@ async def get_status():
     Health check and status of LiteParse OCR & Ollama resident memory.
     """
     model_check = await check_resume_models_in_ollama()
+    parser_instance = get_lite_parser()
     return {
         "status": "ok",
-        "liteparse": bool(lite_parser),
+        "liteparse": parser_instance is not None,
         "ollama": {
             "online": model_check["ollamaOnline"],
             "url": OLLAMA_URL,
@@ -416,36 +474,63 @@ async def parse_pdf(
     start_time = time.time()
     ocr_duration_ms = 0
 
-    # Save uploaded file to temp path
-    suffix = Path(file.filename).suffix or ".pdf"
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        content = await file.read()
-        tmp.write(content)
-        tmp_path = tmp.name
+    # Read uploaded file bytes
+    content = await file.read()
+    file_size_bytes = len(content)
 
     try:
-        print(f"\n[Llama LiteParse] Processing file: {file.filename} using model: {target_model}")
+        print(f"\n[Llama LiteParse] Processing file: {file.filename} (Size: {file_size_bytes} bytes) using model: {target_model}")
+        
+        if file_size_bytes == 0:
+            raise HTTPException(status_code=400, detail="The uploaded file is empty (0 bytes). Check your frontend upload logic.")
 
-        # Step 1: Run Llama LiteParse OCR on the file
+        # Step 1: Run Llama LiteParse OCR directly in-memory (offloaded to thread)
         ocr_start = time.time()
         extracted_text = ""
         total_pages = 1
 
-        if lite_parser:
+        parser = get_lite_parser()
+        if parser is None:
+            # Re-attempt dynamic initialization if not ready
+            parser = get_lite_parser()
+
+        if parser:
             try:
-                parse_result = lite_parser.parse(tmp_path)
-                extracted_text = parse_result.text or ""
+                # Direct in-memory parsing with raw PDF bytes
+                parse_result = await asyncio.to_thread(parser.parse, content)
+                
+                text_part = getattr(parse_result, "text", "") or ""
+                md_part = getattr(parse_result, "markdown", "") or ""
+                
+                # Combine both text and markdown if distinct, otherwise use whichever is present
+                if text_part and md_part and text_part != md_part:
+                    extracted_text = (text_part + "\n\n" + md_part).strip()
+                else:
+                    extracted_text = (text_part or md_part).strip()
+                
+                if not extracted_text:
+                    page_errs = getattr(parse_result, "page_errors", [])
+                    print(f"[Llama LiteParse DEBUG] 0 chars extracted. Page errors: {page_errs}")
+                    print(f"[Llama LiteParse DEBUG] Raw parse result: {parse_result}")
+
                 if hasattr(parse_result, "pages") and parse_result.pages:
                     total_pages = len(parse_result.pages)
+                elif hasattr(parse_result, "total_pages") and parse_result.total_pages:
+                    total_pages = parse_result.total_pages
             except Exception as parse_err:
-                print(f"[WARN] LiteParse extraction failed, falling back: {parse_err}")
+                print(f"[WARN] LiteParse in-memory extraction failed: {parse_err}")
                 extracted_text = ""
+        else:
+            print("[WARN] Llama LiteParse OCR Engine could not be initialized")
         
         ocr_duration_ms = int((time.time() - ocr_start) * 1000)
         print(f"[Llama LiteParse] OCR finished in {ocr_duration_ms}ms ({total_pages} pages, {len(extracted_text)} chars)")
 
         if not extracted_text.strip():
-            raise HTTPException(status_code=400, detail="Could not extract text from the PDF file.")
+            raise HTTPException(
+                status_code=400, 
+                detail="Could not extract text from the PDF file using LiteParse. If this is a scanned or image-based PDF, ensure Tesseract OCR is installed and available in your system PATH, or try a text-based PDF."
+            )
 
         # Step 2: Send structured layout text to local Ollama
         ollama_start = time.time()
@@ -493,13 +578,10 @@ async def parse_pdf(
             }
         }
 
-    finally:
-        # Clean up temporary file
-        if os.path.exists(tmp_path):
-            try:
-                os.unlink(tmp_path)
-            except Exception:
-                pass
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise e
 
 
 @app.post("/api/parse-text")
@@ -554,4 +636,4 @@ if PUBLIC_DIR.exists():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=3000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=3005, reload=True)

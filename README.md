@@ -6,6 +6,13 @@ A high-performance, edge-to-edge AI Resume & CV Parser powered by **FastAPI (Pyt
 This project utilizes a **Qwen2.5 0.5B model that I have custom fine-tuned** specifically for resume parsing. By leveraging a Small Language Model (SLM), `qewnResumePraser` allows you to perform fast, highly accurate data extraction entirely locally on your own hardware. This eliminates the need to rely on costly, high-latency API calls to larger cloud models, ensuring complete data privacy and offline capabilities while maintaining excellent extraction quality.
 
 > 💡 **Deployment Note**: For quick local testing and development, the current setup uses **Ollama**. However, for a production environment, it is highly recommended to serve the model using **vLLM** for maximum throughput and performance.
+
+---
+
+## 🖼️ Sample Result & UI Preview
+
+![Resume Parser AI Sample Result](./assets/sample_result.png)
+
 ---
 
 ## ✨ Key Features
@@ -148,6 +155,8 @@ Interactive API documentation is available at **http://localhost:3000/docs**.
 
 ```
 .
+├── assets/                  # Documentation & UI preview assets
+│   └── sample_result.png    # Sample parsing UI preview
 ├── main.py                  # FastAPI Application & Endpoints
 ├── requirements.txt         # Python Dependencies
 ├── Modelfile.q8_0           # Ollama Modelfile for Q8_0 model
