@@ -1,4 +1,4 @@
-# qewnResumePraser 🚀
+# qewnResumePraser 
 
 A high-performance, edge-to-edge AI Resume & CV Parser powered by **FastAPI (Python)**, **Llama LiteParse OCR Engine**, and **Local Ollama** running dedicated Qwen 0.5B quantized GGUF models.
 
@@ -15,7 +15,7 @@ This project utilizes a **Qwen2.5 0.5B model that I have custom fine-tuned** spe
 
 ---
 
-## ✨ Key Features
+## Key Features
 
 - 📄 **Llama LiteParse OCR**: High-speed, spatial layout-aware OCR engine that accurately preserves multi-column layouts, tables, and sections.
 - ⚡ **Local Quantized Qwen Models**:
@@ -172,6 +172,6 @@ Interactive API documentation is available at **http://localhost:3000/docs**.
 
 ---
 
-## 🔒 License
+##  License
 
 MIT License.
