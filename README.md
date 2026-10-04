@@ -159,9 +159,6 @@ Interactive API documentation is available at **http://localhost:3000/docs**.
 │   └── sample_result.png    # Sample parsing UI preview
 ├── main.py                  # FastAPI Application & Endpoints
 ├── requirements.txt         # Python Dependencies
-├── Modelfile.q8_0           # Ollama Modelfile for Q8_0 model
-├── Modelfile.q4_k_m         # Ollama Modelfile for Q4_K_M model
-├── quantized_gguf_models.zip # GGUF weights & Modelfiles archive
 ├── public/                  # Frontend SPA
 │   ├── index.html           # Full-screen workspace UI
 │   ├── app.js               # Client application logic
@@ -172,6 +169,11 @@ Interactive API documentation is available at **http://localhost:3000/docs**.
 
 ---
 
-##  License
+## License & Disclaimer
 
-MIT License.
+This project is licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for the full license text.
+
+### Disclaimer of Warranty
+This software and the fine-tuned AI model weights are provided on an **"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND**, either express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE.
+
+AI models may occasionally generate inaccurate, incomplete, or hallucinated outputs. Users are solely responsible for evaluating the accuracy, completeness, and appropriateness of the parsed data for any use case, including automated recruitment, candidate evaluation, or hiring decisions.
