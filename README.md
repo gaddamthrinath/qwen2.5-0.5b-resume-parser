@@ -110,21 +110,154 @@ pip install -r requirements.txt
 
 ### 2. Download Models & Register in Local Ollama
 
-The model weights and Modelfiles are hosted on Hugging Face.
+The fine-tuned Qwen2.5 0.5B GGUF model files and Ollama Modelfiles are hosted on Hugging Face.
+
+#### Option A — Clone with Git LFS
+
+Make sure **Git LFS** is installed before cloning:
 
 ```bash
-# 1. Download the models from Hugging Face
+# Install Git LFS
+git lfs install
+
+# Clone the Hugging Face repository
 git clone https://huggingface.co/thrinath25/qwen2.5-0.5b-resume-parser
+
+# Enter the repository
 cd qwen2.5-0.5b-resume-parser
 
-# 2. Register Q8_0 High Precision Model
+# Make sure LFS files are downloaded
+git lfs pull
+```
+
+You should now have the actual `.gguf` model files rather than Git LFS pointer files.
+
+You can verify them with:
+
+```bash
+git lfs ls-files
+```
+
+#### Register the Models in Ollama
+
+> [!NOTE]
+> **Why registration is necessary:** Ollama requires registering models via `Modelfile` to configure inference parameters, system prompts, and bind raw `.gguf` weights into addressable local models.
+
+Register the high-precision Q8 model:
+
+```bash
 ollama create qwenResumeParserQ8 -f ./Modelfile.q8_0
+```
 
-# 3. Register Q4_K_M Fast Model
+Register the faster Q4_K_M model:
+
+```bash
 ollama create qewnResumePraser -f ./Modelfile.q4_k_m
+```
 
-# 4. Verify in Ollama
+Verify that both models are available:
+
+```bash
 ollama list
+```
+
+You should see:
+
+```text
+qwenResumeParserQ8
+qewnResumePraser
+```
+
+> [!IMPORTANT]
+> The exact model names (`qwenResumeParserQ8` and `qewnResumePraser`) are referenced directly in `main.py`, `public/app.js`, and `public/index.html`. If you register the models under custom names, be sure to update those model identifiers across the codebase to match.
+
+#### Option B — Download the Repository Without Git
+
+If Git/Git LFS is not available, you can download the repository files directly from Hugging Face and place the GGUF files and Modelfiles in the project directory.
+
+Note the repository also contains `model.safetensors` for users who want to load the fine-tuned model directly with Hugging Face Transformers. Ollama uses the GGUF files referenced by the respective Modelfiles.
+
+#### ⚠️ Using `model.safetensors` (Transformers / Custom Pipelines)
+
+> [!WARNING]
+> Unlike Ollama GGUF (where the `Modelfile` bakes the system prompt into the registered model), raw `model.safetensors` weights do **not** have the system prompt baked into the file.
+> 
+> The fine-tuned model is **strictly sensitive to the exact system prompt**. When running inference with Hugging Face Transformers, vLLM, or custom pipelines, you **must provide the exact system prompt** to ensure structured JSON output.
+
+### SYSTEM PROMPT:
+
+```dockerfile
+You are an expert, strict resume parsing assistant.
+Extract structured candidate information from the provided resume text into a single valid JSON object.
+
+<json_schema>
+{
+  "full_name": "string or null",
+  "email": "string or null",
+  "phone": "string or null",
+  "location": {
+    "city": "string or null",
+    "state": "string or null",
+    "country": "string or null"
+  },
+  "links": ["string"],
+  "summary": "string or null",
+  "skills": ["string"],
+  "experience": [
+    {
+      "company": "string or null",
+      "title": "string or null",
+      "location": "string or null",
+      "start_date": "string or null",
+      "end_date": "string or null",
+      "is_current": "boolean",
+      "description": "string or null",
+      "highlights": ["string"]
+    }
+  ],
+  "education": [
+    {
+      "institution": "string or null",
+      "degree": "string or null",
+      "field_of_study": "string or null",
+      "start_date": "string or null",
+      "end_date": "string or null",
+      "gpa": "string or null"
+    }
+  ],
+  "certifications": [
+    {
+      "name": "string or null",
+      "issuer": "string or null",
+      "date": "string or null"
+    }
+  ],
+  "awards_achievements": [
+    {
+      "name": "string or null",
+      "issuer": "string or null",
+      "date": "string or null",
+      "description": "string or null"
+    }
+  ],
+  "projects": [
+    {
+      "name": "string or null",
+      "description": "string or null",
+      "technologies": ["string"],
+      "url": "string or null"
+    }
+  ],
+  "spoken_languages": ["string"]
+}
+</json_schema>
+
+<rules>
+1. Strict Grounding: Extract ONLY facts explicitly stated in the text. Never invent, extrapolate, or hallucinate missing details.
+2. Missing or Uncertain Data: If any field, date, or detail is absent or not 100% grounded in the text, strictly output null for strings/objects and [] for arrays (e.g. education, certifications, awards_achievements, projects, spoken_languages).
+3. Spoken Languages: "spoken_languages" refers EXCLUSIVELY to human natural languages.
+4. Output Contract: Output ONLY the raw JSON object. Do not include markdown code fences (no ```json), commentary, or conversational filler.
+</rules>
 ```
 
 ### 3. Run the FastAPI Server
